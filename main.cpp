@@ -2,6 +2,7 @@
 #include <ctime>
 #include <cmath>
 #include <cstdlib>
+#include <functional>
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"
 #include "GL/glu.h"
@@ -43,7 +44,6 @@ int main(int argc,char *argv[]){
 
 	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_BLEND);
-	glPointSize(2);
 
         // --------------------------------------------- vector class //
 
@@ -60,16 +60,60 @@ int main(int argc,char *argv[]){
 			            cos(i));
 		}
 
-		float sqMag()const{return x*x+y*y+z*z;}
-		vec3 operator*(const float &rhs)const{return vec3(x*rhs,y*rhs,z*rhs);}
+		float sqMag(){return x*x+y*y+z*z;}
+		float mag(){return sqrt(sqMag());}
+		vec3 getNorm(){float i = 1.0/mag();return vec3(x*i,y*i,z*i);}
+		vec3 normalize(){return *this = getNorm();}
+		vec3 operator+(const vec3 &rhs){return vec3(x+rhs.x,y+rhs.y,z+rhs.z);}
+		vec3 operator*(const float &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
 
-		void glVertex()const{glVertex3f(x,y,z);}
+		void glVertex(){glVertex3f(x,y,z);}
 	};
 
         // ---------------------------------- geometry initialization //
 
-	list<vec3> starLs;
-	for(int i=0;i<10000;++i)starLs.push_back(vec3::rand()*(2+rFloat*10));
+	#define icoX .525731112119133606
+	#define icoZ .850650808352039932
+
+	vec3 icoInd[12] = {
+		vec3(-icoX,  0.0, icoZ),vec3(icoX,  0.0, icoZ),vec3(-icoX,  0.0,-icoZ),
+		vec3( icoX,  0.0,-icoZ),vec3( 0.0, icoZ, icoX),vec3(  0.0, icoZ,-icoX),
+		vec3(  0.0,-icoZ, icoX),vec3( 0.0,-icoZ,-icoX),vec3( icoZ, icoX,  0.0),
+		vec3(-icoZ, icoX,  0.0),vec3(icoZ,-icoX,  0.0),vec3(-icoZ,-icoX,  0.0),
+	};
+
+	const int icoTri[20][3]={ 
+		{ 0, 4, 1},{ 0, 9, 4},{ 9, 5, 4},{ 4, 5, 8},{ 4, 8, 1},
+		{ 8,10, 1},{ 8, 3,10},{ 5, 3, 8},{ 5, 2, 3},{ 2, 7, 3},
+		{ 7,10, 3},{ 7, 6,10},{ 7,11, 6},{11, 0, 6},{ 0, 1, 6},
+		{ 6, 1,10},{ 9, 0,11},{ 9,11, 2},{ 9, 2, 5},{ 7, 2,11}
+	};
+
+	function<void(vec3,vec3,vec3,int)> icoRecurse = [&](vec3 v1,vec3 v2,vec3 v3,int depth){
+		if(depth == 0){v1.glVertex();v2.glVertex();v3.glVertex();return;}
+		vec3 v12 = (v1+v2).getNorm(),v23 = (v2+v3).getNorm(),v31 = (v3+v1).getNorm();
+		icoRecurse(v1,v12,v31,depth-1);icoRecurse( v2,v23,v12,depth-1);
+		icoRecurse(v3,v31,v23,depth-1);icoRecurse(v12,v23,v31,depth-1);
+	};
+
+	int icoDList = glGenLists(1);
+	glNewList(icoDList,GL_COMPILE);
+	glBegin(GL_TRIANGLES);
+		for(int i=0;i<20;++i)icoRecurse(icoInd[icoTri[i][0]].normalize(),
+		                                icoInd[icoTri[i][1]].normalize(),
+		                                icoInd[icoTri[i][2]].normalize(),4);
+	glEnd();
+	glEndList();
+
+	int starDList = glGenLists(1);
+	glNewList(starDList,GL_COMPILE);
+	glBegin(GL_POINTS);
+	for(int i=0;i<10000;++i){
+		vec3 v = vec3::rand()*(2+rFloat*10);
+		glColor4f(1,1,1,0.5-v.sqMag()*0.02);
+		v.glVertex();
+	}glEnd();
+	glEndList();
 
         // ------------------------------------------------ main loop //
 
@@ -92,12 +136,11 @@ int main(int argc,char *argv[]){
 
 		glPushMatrix();
 			glRotatef(tick*0.001,0,1,0);
-			glBegin(GL_POINTS);
-			for(auto i:starLs){
-				glColor4f(1,1,1,0.5-i.sqMag()*0.02);
-				i.glVertex();
-			}glEnd();
+			glCallList(starDList);
 		glPopMatrix();
+
+		glColor4f(1,0.6,0,0.7);
+		glCallList(icoDList);
 
 		SDL_GL_SwapWindow(window);
 	}
