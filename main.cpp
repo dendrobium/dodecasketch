@@ -29,6 +29,16 @@ int main(int argc,char *argv[]){
 
         // ------------------------------------ camera initialization //
 
+	float cameraX = 0,cameraGoalX = 0,cameraGrabX = 0;
+	float cameraY = 0,cameraGoalY = 0,cameraGrabY = 0;
+
+	auto updateCamera = [&]{
+		if(cameraGoalY < -90)cameraGoalY = -90;
+		if(cameraGoalY >  90)cameraGoalY =  90;
+		cameraX += (cameraGoalX-cameraX)*elapsed*0.01;
+		cameraY += (cameraGoalY-cameraY)*elapsed*0.01;
+	};
+
 	auto reshape = [&](unsigned int width,unsigned int height){
 		SDL_SetWindowSize(window,windowWidth=width,windowHeight=height);
 		glViewport(0,0,windowWidth,windowHeight);
@@ -41,9 +51,8 @@ int main(int argc,char *argv[]){
 	reshape(windowWidth,windowHeight);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
-
-	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
 
         // --------------------------------------------- vector class //
 
@@ -51,13 +60,9 @@ int main(int argc,char *argv[]){
 		float x,y,z;
 		vec3() = default;
 		vec3(float x,float y,float z):x(x),y(y),z(z){}
-
 		static vec3 rand(){
-			float i = acos(2*rFloat-1);
-			float a = 2*M_PI*rFloat;
-			return vec3(sin(i)*cos(a),
-			            sin(i)*sin(a),
-			            cos(i));
+			float i = acos(2*rFloat-1),a = 2*M_PI*rFloat;
+			return vec3(sin(i)*cos(a),sin(i)*sin(a),cos(i));
 		}
 
 		float sqMag(){return x*x+y*y+z*z;}
@@ -66,7 +71,6 @@ int main(int argc,char *argv[]){
 		vec3 normalize(){return *this = getNorm();}
 		vec3 operator+(const vec3 &rhs){return vec3(x+rhs.x,y+rhs.y,z+rhs.z);}
 		vec3 operator*(const float &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
-
 		void glVertex(){glVertex3f(x,y,z);}
 	};
 
@@ -90,7 +94,7 @@ int main(int argc,char *argv[]){
 	};
 
 	function<void(vec3,vec3,vec3,int)> icoRecurse = [&](vec3 v1,vec3 v2,vec3 v3,int depth){
-		if(depth == 0){v1.glVertex();v2.glVertex();v3.glVertex();return;}
+		if(depth == 0){v3.glVertex();v2.glVertex();v1.glVertex();return;}
 		vec3 v12 = (v1+v2).getNorm(),v23 = (v2+v3).getNorm(),v31 = (v3+v1).getNorm();
 		icoRecurse(v1,v12,v31,depth-1);icoRecurse( v2,v23,v12,depth-1);
 		icoRecurse(v3,v31,v23,depth-1);icoRecurse(v12,v23,v31,depth-1);
@@ -100,8 +104,7 @@ int main(int argc,char *argv[]){
 	glNewList(icoDList,GL_COMPILE);
 	glBegin(GL_TRIANGLES);
 		for(int i=0;i<20;++i)icoRecurse(icoInd[icoTri[i][0]].normalize(),
-		                                icoInd[icoTri[i][1]].normalize(),
-		                                icoInd[icoTri[i][2]].normalize(),4);
+			icoInd[icoTri[i][1]].normalize(),icoInd[icoTri[i][2]].normalize(),4);
 	glEnd();
 	glEndList();
 
@@ -115,6 +118,39 @@ int main(int argc,char *argv[]){
 	}glEnd();
 	glEndList();
 
+        // ------------------------------------------------- controls //
+
+	bool mouseBtn[3] = {false,false,false};
+
+	auto controls = [&]{
+		SDL_Event event;
+		while(SDL_PollEvent(&event))switch(event.type){
+			case SDL_QUIT:exit(0);
+			case SDL_KEYUP:if(!event.key.repeat)switch(event.key.keysym.sym){
+				case SDLK_ESCAPE:exit(0);
+			}break;
+
+			case SDL_MOUSEBUTTONDOWN:switch(event.button.button){
+				case SDL_BUTTON_RIGHT:
+					cameraGrabX = event.motion.x-cameraGoalX;
+					cameraGrabY = event.motion.y-cameraGoalY;
+					mouseBtn[2] = true;
+					break;
+			}break;
+
+			case SDL_MOUSEMOTION:
+				if(mouseBtn[2]){
+					cameraGoalX = event.motion.x-cameraGrabX;
+					cameraGoalY = event.motion.y-cameraGrabY;
+				}
+			break;
+
+			case SDL_MOUSEBUTTONUP:switch(event.button.button){
+				case SDL_BUTTON_RIGHT:mouseBtn[2] = false;break;
+			}break;
+		}
+	};
+
         // ------------------------------------------------ main loop //
 
 	while(true){
@@ -122,17 +158,14 @@ int main(int argc,char *argv[]){
 		elapsed = newTick-tick;
 		tick = newTick;
 
-		SDL_Event event;
-		while(SDL_PollEvent(&event))switch(event.type){
-			case SDL_QUIT:return 0;
-			case SDL_KEYUP:if(!event.key.repeat)switch(event.key.keysym.sym){
-				case SDLK_ESCAPE:return 0;
-			}break;
-		}
+		controls();
+		updateCamera();
 
 		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 		glTranslatef(0,0,-4);
+		glRotatef(cameraY,1,0,0);
+		glRotatef(cameraX,0,1,0);
 
 		glPushMatrix();
 			glRotatef(tick*0.001,0,1,0);
