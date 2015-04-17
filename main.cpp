@@ -190,9 +190,12 @@ int main(int argc,char *argv[]){
 	auto controls = [&]{
 		SDL_Event event;
 		while(SDL_PollEvent(&event))switch(event.type){
-			case SDL_QUIT:exit(0);
+			case SDL_QUIT:exit(0);break;
+			case SDL_WINDOWEVENT:switch(event.window.event){
+				case SDL_WINDOWEVENT_RESIZED:reshape(event.window.data1,event.window.data2);break;
+			}break;
 			case SDL_KEYUP:if(!event.key.repeat)switch(event.key.keysym.sym){
-				case SDLK_ESCAPE:exit(0);
+				case SDLK_ESCAPE:exit(0);break;
 			}break;
 
 			case SDL_MOUSEBUTTONDOWN:switch(event.button.button){
