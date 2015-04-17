@@ -2,13 +2,14 @@
 #include <ctime>
 #include <cmath>
 #include <cstdlib>
+#include <iostream>
 #include <functional>
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"
 #include "GL/glu.h"
 using namespace std;
 
-#define rFloat ((float)std::rand()/RAND_MAX)
+#define rDouble ((double)std::rand()/RAND_MAX)
 
 int main(int argc,char *argv[]){
 
@@ -29,8 +30,8 @@ int main(int argc,char *argv[]){
 
         // ------------------------------------ camera initialization //
 
-	float cameraX = 0,cameraGoalX = 0,cameraGrabX = 0;
-	float cameraY = 0,cameraGoalY = 0,cameraGrabY = 0;
+	double cameraX = 0,cameraGoalX = 0,cameraGrabX = 0;
+	double cameraY = 0,cameraGoalY = 0,cameraGrabY = 0;
 
 	auto updateCamera = [&]{
 		if(cameraGoalY < -90)cameraGoalY = -90;
@@ -44,7 +45,7 @@ int main(int argc,char *argv[]){
 		glViewport(0,0,windowWidth,windowHeight);
 		glMatrixMode(GL_PROJECTION);
 		glLoadIdentity();
-		gluPerspective(45,(float)windowWidth/windowHeight,0.1,20);
+		gluPerspective(45,(double)windowWidth/windowHeight,0.1,20);
 		glMatrixMode(GL_MODELVIEW);
 	};
 
@@ -57,21 +58,22 @@ int main(int argc,char *argv[]){
         // --------------------------------------------- vector class //
 
 	struct vec3{
-		float x,y,z;
+		double x,y,z;
 		vec3() = default;
-		vec3(float x,float y,float z):x(x),y(y),z(z){}
+		vec3(double x,double y,double z):x(x),y(y),z(z){}
 		static vec3 rand(){
-			float i = acos(2*rFloat-1),a = 2*M_PI*rFloat;
+			double i = acos(2*rDouble-1),a = 2*M_PI*rDouble;
 			return vec3(sin(i)*cos(a),sin(i)*sin(a),cos(i));
 		}
 
-		float sqMag(){return x*x+y*y+z*z;}
-		float mag(){return sqrt(sqMag());}
-		vec3 getNorm(){float i = 1.0/mag();return vec3(x*i,y*i,z*i);}
+		double sqMag(){return x*x+y*y+z*z;}
+		double mag(){return sqrt(sqMag());}
+		vec3 getNorm(){double i = 1.0/mag();return vec3(x*i,y*i,z*i);}
 		vec3 normalize(){return *this = getNorm();}
 		vec3 operator+(const vec3 &rhs){return vec3(x+rhs.x,y+rhs.y,z+rhs.z);}
-		vec3 operator*(const float &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
+		vec3 operator*(const double &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
 		void glVertex(){glVertex3f(x,y,z);}
+		void print(){cout<<x<<" "<<y<<" "<<z<<endl;}
 	};
 
         // ---------------------------------- geometry initialization //
@@ -112,11 +114,28 @@ int main(int argc,char *argv[]){
 	glNewList(starDList,GL_COMPILE);
 	glBegin(GL_POINTS);
 	for(int i=0;i<10000;++i){
-		vec3 v = vec3::rand()*(2+rFloat*10);
+		vec3 v = vec3::rand()*(2+rDouble*10);
 		glColor4f(1,1,1,0.5-v.sqMag()*0.02);
 		v.glVertex();
 	}glEnd();
 	glEndList();
+
+        // ------------------------------------------ drawing related //
+
+	list<list<vec3>> strokeLs;
+
+	auto mouseToWorld = [&](int x,int y){
+		int viewport[4];
+		double modelview[16],projection[16];
+		GLdouble posX,posY,posZ;
+		glGetDoublev(GL_MODELVIEW_MATRIX,modelview);
+		glGetDoublev(GL_PROJECTION_MATRIX,projection);
+		glGetIntegerv(GL_VIEWPORT,viewport);
+		GLfloat windowX = x,windowY = viewport[3]-y,windowZ;
+		glReadPixels(x,windowY,1,1,GL_DEPTH_COMPONENT,GL_FLOAT,&windowZ);
+		gluUnProject(windowX,windowY,windowZ,modelview,projection,viewport,&posX,&posY,&posZ);
+		return vec3(posX,posY,posZ);
+	};
 
         // ------------------------------------------------- controls //
 
@@ -131,6 +150,10 @@ int main(int argc,char *argv[]){
 			}break;
 
 			case SDL_MOUSEBUTTONDOWN:switch(event.button.button){
+				case SDL_BUTTON_LEFT:
+					strokeLs.push_back(list<vec3>());
+					mouseBtn[0] = true;
+					break;
 				case SDL_BUTTON_RIGHT:
 					cameraGrabX = event.motion.x-cameraGoalX;
 					cameraGrabY = event.motion.y-cameraGoalY;
@@ -138,14 +161,21 @@ int main(int argc,char *argv[]){
 					break;
 			}break;
 
-			case SDL_MOUSEMOTION:
-				if(mouseBtn[2]){
-					cameraGoalX = event.motion.x-cameraGrabX;
-					cameraGoalY = event.motion.y-cameraGrabY;
+			case SDL_MOUSEMOTION:{
+				int mouseX = event.motion.x,mouseY = event.motion.y;
+				if(mouseBtn[0]){
+					glClear(GL_DEPTH_BUFFER_BIT);
+					glCallList(icoDList);
+					vec3 coords = mouseToWorld(mouseX,mouseY);
+					if(abs(coords.mag()-1)<0.1)strokeLs.back().push_back(coords.getNorm());
+				}if(mouseBtn[2]){
+					cameraGoalX = mouseX-cameraGrabX;
+					cameraGoalY = mouseY-cameraGrabY;
 				}
-			break;
+			}break;
 
 			case SDL_MOUSEBUTTONUP:switch(event.button.button){
+				case SDL_BUTTON_LEFT: mouseBtn[0] = false;break;
 				case SDL_BUTTON_RIGHT:mouseBtn[2] = false;break;
 			}break;
 		}
@@ -158,22 +188,33 @@ int main(int argc,char *argv[]){
 		elapsed = newTick-tick;
 		tick = newTick;
 
-		controls();
-		updateCamera();
-
-		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 		glLoadIdentity();
 		glTranslatef(0,0,-4);
 		glRotatef(cameraY,1,0,0);
 		glRotatef(cameraX,0,1,0);
+
+		controls();
+		updateCamera();
+
+		glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 
 		glPushMatrix();
 			glRotatef(tick*0.001,0,1,0);
 			glCallList(starDList);
 		glPopMatrix();
 
-		glColor4f(1,0.6,0,0.7);
-		glCallList(icoDList);
+		glColor3f(0.6,1,0);
+		for(auto stroke:strokeLs){
+			glBegin(GL_LINE_STRIP);
+				for(auto i:stroke)i.glVertex();
+			glEnd();
+		}
+
+		glPushMatrix();
+			glScalef(0.99,0.99,0.99);
+			glColor4f(0,0.02,0.0,0.9);
+			glCallList(icoDList);
+		glPopMatrix();
 
 		SDL_GL_SwapWindow(window);
 	}
