@@ -137,6 +137,52 @@ int main(int argc,char *argv[]){
 		return vec3(posX,posY,posZ);
 	};
 
+	auto renderTile = [&]{
+		glColor3f(0.6,1,0);
+		for(auto stroke:strokeLs){
+			glBegin(GL_LINE_STRIP);
+				for(auto i:stroke)i.glVertex();
+			glEnd();
+		}
+	};
+
+	auto renderFace = [&]{
+		glColor3f(1,1,1);
+		glBegin(GL_LINES);
+			glVertex3f(0,1.02,0);
+			glVertex3f(0,0.95,0);
+		glEnd();
+
+		glPushMatrix();
+			for(int i=0;i<5;++i){
+				renderTile();
+				glRotatef(72,0,1,0);
+			}
+		glPopMatrix();
+	};
+
+	auto renderHemi = [&]{
+		renderFace();
+		glPushMatrix();
+			for(int i=0;i<5;++i){
+				glPushMatrix();
+					glRotatef(63.43495,0,0,1);
+					glRotatef(180,0,1,0);
+					renderFace();
+				glPopMatrix();
+				glRotatef(72,0,1,0);
+			}
+		glPopMatrix();
+	};
+
+	auto renderDodec = [&]{
+		glPushMatrix();
+			renderHemi();
+			glRotatef(180,0,0,1);
+			renderHemi();
+		glPopMatrix();
+	};
+
         // ------------------------------------------------- controls //
 
 	bool mouseBtn[3] = {false,false,false};
@@ -203,12 +249,7 @@ int main(int argc,char *argv[]){
 			glCallList(starDList);
 		glPopMatrix();
 
-		glColor3f(0.6,1,0);
-		for(auto stroke:strokeLs){
-			glBegin(GL_LINE_STRIP);
-				for(auto i:stroke)i.glVertex();
-			glEnd();
-		}
+		renderDodec();
 
 		glPushMatrix();
 			glScalef(0.99,0.99,0.99);
