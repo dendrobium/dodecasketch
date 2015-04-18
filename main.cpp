@@ -31,8 +31,8 @@ int main(int argc,char *argv[]){
 
         // ------------------------------------ camera initialization //
 
-	double cameraX = 0,cameraGoalX = 0,cameraGrabX = 0;
-	double cameraY = 0,cameraGoalY = 0,cameraGrabY = 0;
+	double cameraX =  15,cameraGoalX = 0,cameraGrabX = 0;
+	double cameraY = -15,cameraGoalY = 0,cameraGrabY = 0;
 
 	auto updateCamera = [&]{
 		if(cameraGoalY < -90)cameraGoalY = -90;
@@ -216,6 +216,12 @@ int main(int argc,char *argv[]){
 			}break;
 			case SDL_KEYUP:if(!event.key.repeat)switch(event.key.keysym.sym){
 				case SDLK_ESCAPE:exit(0);break;
+				case SDLK_z:if(event.key.keysym.mod && KMOD_CTRL){
+					if(undoStack.size() <= 0)return;
+					int layer = undoStack.back();
+					undoStack.pop_back();
+					layerLs[layer].pop_back();
+				}break;
 			}break;
 
 			case SDL_MOUSEBUTTONDOWN:switch(event.button.button){
@@ -243,7 +249,7 @@ int main(int argc,char *argv[]){
 			}break;
 
 			case SDL_MOUSEWHEEL:
-				currentLayer += event.wheel.y;
+				currentLayer -= event.wheel.y;
 				break;
 
 			case SDL_MOUSEBUTTONUP:switch(event.button.button){
@@ -260,6 +266,7 @@ int main(int argc,char *argv[]){
 					currentStrokeLs.clear();
 					layerLs[currentLayer].push_back(dList);
 				}break;
+				case SDL_BUTTON_MIDDLE:break;
 				case SDL_BUTTON_RIGHT:mouseBtn[2] = false;break;
 			}break;
 		}
@@ -295,7 +302,7 @@ int main(int argc,char *argv[]){
 
 		glPushMatrix();
 			glScalef(0.99,0.99,0.99);
-			glColor4f(0,0,0.0,0.9);
+			glColor4f(0.02,0.02,0.02,0.9);
 			glCallList(icoDList);
 		glPopMatrix();
 
