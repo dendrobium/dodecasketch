@@ -71,6 +71,7 @@ int main(int argc,char *argv[]){
 		vec3 getNorm(){double i = 1.0/mag();return vec3(x*i,y*i,z*i);}
 		vec3 normalize(){return *this = getNorm();}
 		vec3 operator+(const vec3 &rhs){return vec3(x+rhs.x,y+rhs.y,z+rhs.z);}
+		vec3 operator-(const vec3 &rhs){return vec3(x-rhs.x,y-rhs.y,z-rhs.z);}
 		vec3 operator*(const double &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
 		void glVertex(){glVertex3f(x,y,z);}
 		void print(){cout<<x<<" "<<y<<" "<<z<<endl;}
@@ -123,6 +124,7 @@ int main(int argc,char *argv[]){
         // ------------------------------------------ drawing related //
 
 	list<list<vec3>> strokeLs;
+	vec3 pointerGoal,pointer;
 
 	auto mouseToWorld = [&](int x,int y){
 		int viewport[4];
@@ -138,6 +140,13 @@ int main(int argc,char *argv[]){
 	};
 
 	auto renderTile = [&]{
+		if(abs(pointer.mag()-1)<0.1){
+			glColor4f(0,1,0,0.5);
+			glBegin(GL_POINTS);
+				pointer.glVertex();
+			glEnd();
+		}
+
 		glColor3f(0.6,1,0);
 		for(auto stroke:strokeLs){
 			glBegin(GL_LINE_STRIP);
@@ -176,6 +185,8 @@ int main(int argc,char *argv[]){
 	};
 
 	auto renderDodec = [&]{
+		if(abs(pointer.mag()-1)>0.1 && abs(pointerGoal.mag()-1)<0.1)pointer = pointerGoal;
+		pointer = pointer+(pointerGoal-pointer)*elapsed*0.02;
 		glPushMatrix();
 			renderHemi();
 			glRotatef(180,0,0,1);
@@ -212,11 +223,11 @@ int main(int argc,char *argv[]){
 
 			case SDL_MOUSEMOTION:{
 				int mouseX = event.motion.x,mouseY = event.motion.y;
+				glClear(GL_DEPTH_BUFFER_BIT);
+				glCallList(icoDList);
+				pointerGoal = mouseToWorld(mouseX,mouseY);
 				if(mouseBtn[0]){
-					glClear(GL_DEPTH_BUFFER_BIT);
-					glCallList(icoDList);
-					vec3 coords = mouseToWorld(mouseX,mouseY);
-					if(abs(coords.mag()-1)<0.1)strokeLs.back().push_back(coords.getNorm());
+					if(abs(pointer.mag()-1)<0.1)strokeLs.back().push_back(pointer.getNorm());
 				}if(mouseBtn[2]){
 					cameraGoalX = mouseX-cameraGrabX;
 					cameraGoalY = mouseY-cameraGrabY;
@@ -233,6 +244,7 @@ int main(int argc,char *argv[]){
         // ------------------------------------------------ main loop //
 
 	while(true){
+		SDL_Delay(10);
 		unsigned long newTick = SDL_GetTicks();
 		elapsed = newTick-tick;
 		tick = newTick;
@@ -261,7 +273,5 @@ int main(int argc,char *argv[]){
 		glPopMatrix();
 
 		SDL_GL_SwapWindow(window);
-	}
-
-	return 0;
+	}return 0;
 }
