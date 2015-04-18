@@ -1,3 +1,4 @@
+#include <map>
 #include <list>
 #include <ctime>
 #include <cmath>
@@ -74,7 +75,7 @@ int main(int argc,char *argv[]){
 		vec3 operator-(const vec3 &rhs){return vec3(x-rhs.x,y-rhs.y,z-rhs.z);}
 		vec3 operator*(const double &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
 		void glVertex(){glVertex3f(x,y,z);}
-		void print(){cout<<x<<" "<<y<<" "<<z<<endl;}
+		void glColor(){glColor3f(x,y,z);}
 	};
 
         // ---------------------------------- geometry initialization //
@@ -123,7 +124,12 @@ int main(int argc,char *argv[]){
 
         // ------------------------------------------ drawing related //
 
-	list<list<vec3>> strokeLs;
+	vec3 currentColor = vec3(0.6,1,0);
+	int currentLayer = 0;
+	float renderedLayer = 0;
+	list<vec3> currentStrokeLs;
+	map<int,list<int>> layerLs;
+	list<int> undoStack;
 	vec3 pointerGoal,pointer;
 
 	auto mouseToWorld = [&](int x,int y){
@@ -147,11 +153,16 @@ int main(int argc,char *argv[]){
 			glEnd();
 		}
 
-		glColor3f(0.6,1,0);
-		for(auto stroke:strokeLs){
-			glBegin(GL_LINE_STRIP);
-				for(auto i:stroke)i.glVertex();
-			glEnd();
+		currentColor.glColor();
+		glBegin(GL_LINE_STRIP);
+			for(auto i:currentStrokeLs)i.glVertex();
+		glEnd();
+		for(auto i:layerLs){
+			glPushMatrix();
+				double s = (i.first-renderedLayer)*0.02+1;
+				glScalef(s,s,s);
+				for(auto j:i.second)glCallList(j);
+			glPopMatrix();
 		}
 	};
 
@@ -185,8 +196,6 @@ int main(int argc,char *argv[]){
 	};
 
 	auto renderDodec = [&]{
-		if(abs(pointer.mag()-1)>0.1 && abs(pointerGoal.mag()-1)<0.1)pointer = pointerGoal;
-		pointer = pointer+(pointerGoal-pointer)*elapsed*0.02;
 		glPushMatrix();
 			renderHemi();
 			glRotatef(180,0,0,1);
@@ -211,7 +220,6 @@ int main(int argc,char *argv[]){
 
 			case SDL_MOUSEBUTTONDOWN:switch(event.button.button){
 				case SDL_BUTTON_LEFT:
-					strokeLs.push_back(list<vec3>());
 					mouseBtn[0] = true;
 					break;
 				case SDL_BUTTON_RIGHT:
@@ -227,15 +235,31 @@ int main(int argc,char *argv[]){
 				glCallList(icoDList);
 				pointerGoal = mouseToWorld(mouseX,mouseY);
 				if(mouseBtn[0]){
-					if(abs(pointer.mag()-1)<0.1)strokeLs.back().push_back(pointer.getNorm());
+					if(abs(pointer.mag()-1)<0.1)currentStrokeLs.push_back(pointer.getNorm());
 				}if(mouseBtn[2]){
 					cameraGoalX = mouseX-cameraGrabX;
 					cameraGoalY = mouseY-cameraGrabY;
 				}
 			}break;
 
+			case SDL_MOUSEWHEEL:
+				currentLayer += event.wheel.y;
+				break;
+
 			case SDL_MOUSEBUTTONUP:switch(event.button.button){
-				case SDL_BUTTON_LEFT: mouseBtn[0] = false;break;
+				case SDL_BUTTON_LEFT:{
+					mouseBtn[0] = false;
+					undoStack.push_back(currentLayer);
+					int dList = glGenLists(1);
+					glNewList(dList,GL_COMPILE);
+						currentColor.glColor();
+						glBegin(GL_LINE_STRIP);
+							for(auto i:currentStrokeLs)i.glVertex();
+						glEnd();
+					glEndList();
+					currentStrokeLs.clear();
+					layerLs[currentLayer].push_back(dList);
+				}break;
 				case SDL_BUTTON_RIGHT:mouseBtn[2] = false;break;
 			}break;
 		}
@@ -264,11 +288,14 @@ int main(int argc,char *argv[]){
 			glCallList(starDList);
 		glPopMatrix();
 
+		if(abs(pointer.mag()-1)>0.1 && abs(pointerGoal.mag()-1)<0.1)pointer = pointerGoal;
+		pointer = pointer+(pointerGoal-pointer)*elapsed*0.02;
+		renderedLayer += (currentLayer-renderedLayer)*elapsed*0.01;
 		renderDodec();
 
 		glPushMatrix();
 			glScalef(0.99,0.99,0.99);
-			glColor4f(0,0.02,0.0,0.9);
+			glColor4f(0,0,0.0,0.9);
 			glCallList(icoDList);
 		glPopMatrix();
 
