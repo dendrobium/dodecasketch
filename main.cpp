@@ -2,6 +2,7 @@
 #include <list>
 #include <ctime>
 #include <cmath>
+#include <sstream>
 #include <cstdlib>
 #include <iostream>
 #include <functional>
@@ -28,6 +29,17 @@ int main(int argc,char *argv[]){
 	                     SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,
 	                     windowWidth,windowHeight,
 	                     SDL_WINDOW_OPENGL|SDL_WINDOW_RESIZABLE));
+
+	unsigned int sw = 400;
+	unsigned int sh = 400;
+
+	auto screenshot = [&](char* filename){
+		SDL_Surface* image = SDL_CreateRGBSurface(SDL_SWSURFACE,sw,sh,24,0x000000FF,0x0000FF00,0x00FF0000,0);
+		glReadBuffer(GL_FRONT);
+		glReadPixels(0,0,sw,sh,GL_RGB,GL_UNSIGNED_BYTE,image->pixels);
+		SDL_SaveBMP(image,filename);
+		SDL_FreeSurface(image);
+	};
 
         // ------------------------------------ camera initialization //
 
@@ -189,7 +201,7 @@ int main(int argc,char *argv[]){
 		glEnd();
 		for(auto i:layerLs){
 			glPushMatrix();
-				double s = (i.first-renderedLayer)*0.02+1;
+				double s = (i.first-renderedLayer)*0.01+1;
 				glScalef(s,s,s);
 				for(auto j:i.second)glCallList(j);
 			glPopMatrix();
@@ -254,6 +266,28 @@ int main(int argc,char *argv[]){
 			}break;
 			case SDL_KEYUP:if(!event.key.repeat)switch(event.key.keysym.sym){
 				case SDLK_ESCAPE:exit(0);break;
+				case SDLK_F5:{
+					reshape(sw,sh);
+					for(int r=0;r<73;++r){ // TODO: fix first frame
+						glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
+						glLoadIdentity();
+						glTranslatef(0,0,-4);
+						glRotatef(-30,1,0,0);
+						glRotatef(r,0,1,0);
+						renderDodec();
+						glPushMatrix();
+							glScalef(0.99,0.99,0.99);
+							glColor4f(0.02,0.02,0.02,0.9);
+							glCallList(mode?colorDList:icoDList);
+						glPopMatrix();
+						SDL_GL_SwapWindow(window);
+						char filename[8];
+						sprintf(filename,"%02d.bmp",r);
+						screenshot(filename);
+					}stringstream ss;
+					ss << "rm 00.bmp && convert -delay 3 -loop 0 *.bmp " << time(0) << ".gif && rm *.bmp";
+					system(ss.str().c_str());
+				}break;
 				case SDLK_z:if(event.key.keysym.mod && KMOD_CTRL){
 					if(undoStack.size() <= 0)return;
 					int layer = undoStack.back();
