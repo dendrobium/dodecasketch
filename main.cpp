@@ -51,6 +51,7 @@ int main(int argc,char *argv[]){
 	};
 
 	reshape(windowWidth,windowHeight);
+	glShadeModel(GL_FLAT);
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
@@ -76,6 +77,21 @@ int main(int argc,char *argv[]){
 		vec3 operator*(const double &rhs){return vec3(x*rhs,y*rhs,z*rhs);}
 		void glVertex(){glVertex3f(x,y,z);}
 		void glColor(){glColor3f(x,y,z);}
+
+		void glHSV(){
+			[&](double h,double s,double v){
+				float c = v*s;
+				h = fmod(h*6,6);
+				float i = c*(1-abs(fmod(h,2)-1));
+				     if (0 <= h && h < 1) vec3(c,i,0).glColor();
+				else if (1 <= h && h < 2) vec3(i,c,0).glColor();
+				else if (2 <= h && h < 3) vec3(0,c,i).glColor();
+				else if (3 <= h && h < 4) vec3(0,i,c).glColor();
+				else if (4 <= h && h < 5) vec3(i,0,c).glColor();
+				else if (5 <= h && h < 6) vec3(c,0,i).glColor();
+				else                      vec3(0,0,0).glColor();
+			}((atan2(z,x)+2*M_PI)/(2*M_PI),1,acos(-y/sqMag())/M_PI);
+		}
 	};
 
         // ---------------------------------- geometry initialization //
@@ -94,22 +110,35 @@ int main(int argc,char *argv[]){
 		{ 0, 4, 1},{ 0, 9, 4},{ 9, 5, 4},{ 4, 5, 8},{ 4, 8, 1},
 		{ 8,10, 1},{ 8, 3,10},{ 5, 3, 8},{ 5, 2, 3},{ 2, 7, 3},
 		{ 7,10, 3},{ 7, 6,10},{ 7,11, 6},{11, 0, 6},{ 0, 1, 6},
-		{ 6, 1,10},{ 9, 0,11},{ 9,11, 2},{ 9, 2, 5},{ 7, 2,11}
+		{ 6, 1,10},{ 9, 0,11},{ 9,11, 2},{ 9, 2, 5},{ 7, 2,11},
 	};
 
-	function<void(vec3,vec3,vec3,int)> icoRecurse = [&](vec3 v1,vec3 v2,vec3 v3,int depth){
-		if(depth == 0){v3.glVertex();v2.glVertex();v1.glVertex();return;}
-		vec3 v12 = (v1+v2).getNorm(),v23 = (v2+v3).getNorm(),v31 = (v3+v1).getNorm();
-		icoRecurse(v1,v12,v31,depth-1);icoRecurse( v2,v23,v12,depth-1);
-		icoRecurse(v3,v31,v23,depth-1);icoRecurse(v12,v23,v31,depth-1);
+	function<void(vec3,vec3,vec3,int,bool)> icoRecurse = [&](vec3 v1,vec3 v2,vec3 v3,int depth,bool colorize){
+		if(depth == 0){
+			if(colorize)v3.glHSV();v3.glVertex();
+			if(colorize)v2.glHSV();v2.glVertex();
+			if(colorize)v1.glHSV();v1.glVertex();
+			return;
+		}vec3 v12 = (v1+v2).getNorm(),v23 = (v2+v3).getNorm(),v31 = (v3+v1).getNorm();
+		icoRecurse(v1,v12,v31,depth-1,colorize);icoRecurse( v2,v23,v12,depth-1,colorize);
+		icoRecurse(v3,v31,v23,depth-1,colorize);icoRecurse(v12,v23,v31,depth-1,colorize);
+	};
+
+	auto renderIco = [&](bool colorize){
+		glBegin(GL_TRIANGLES);
+			for(int i=0;i<20;++i)icoRecurse(icoInd[icoTri[i][0]].normalize(),
+				icoInd[icoTri[i][1]].normalize(),icoInd[icoTri[i][2]].normalize(),4,colorize);
+		glEnd();
 	};
 
 	int icoDList = glGenLists(1);
 	glNewList(icoDList,GL_COMPILE);
-	glBegin(GL_TRIANGLES);
-		for(int i=0;i<20;++i)icoRecurse(icoInd[icoTri[i][0]].normalize(),
-			icoInd[icoTri[i][1]].normalize(),icoInd[icoTri[i][2]].normalize(),4);
-	glEnd();
+		renderIco(false);
+	glEndList();
+
+	int colorDList = glGenLists(1);
+	glNewList(colorDList,GL_COMPILE);
+		renderIco(true);
 	glEndList();
 
 	int starDList = glGenLists(1);
@@ -124,7 +153,8 @@ int main(int argc,char *argv[]){
 
         // ------------------------------------------ drawing related //
 
-	vec3 currentColor = vec3(0.6,1,0);
+	bool mode = false; // false = drawing, true = color-picker
+	vec3 currentColor = vec3(0.6,1,0).normalize();
 	int currentLayer = 0;
 	float renderedLayer = 0;
 	list<vec3> currentStrokeLs;
@@ -147,13 +177,13 @@ int main(int argc,char *argv[]){
 
 	auto renderTile = [&]{
 		if(abs(pointer.mag()-1)<0.1){
-			glColor4f(0,1,0,0.5);
+			glColor4f(1,1,1,0.5);
 			glBegin(GL_POINTS);
 				pointer.glVertex();
 			glEnd();
 		}
 
-		currentColor.glColor();
+		currentColor.glHSV();
 		glBegin(GL_LINE_STRIP);
 			for(auto i:currentStrokeLs)i.glVertex();
 		glEnd();
@@ -203,6 +233,14 @@ int main(int argc,char *argv[]){
 		glPopMatrix();
 	};
 
+	auto renderColorSelector = [&]{
+		glBegin(GL_LINES);
+			glColor3f(1,1,1);
+			(currentColor*1.1).glVertex();
+			(currentColor*1.3).glVertex();
+		glEnd();
+	};
+
         // ------------------------------------------------- controls //
 
 	bool mouseBtn[3] = {false,false,false};
@@ -241,7 +279,10 @@ int main(int argc,char *argv[]){
 				glCallList(icoDList);
 				pointerGoal = mouseToWorld(mouseX,mouseY);
 				if(mouseBtn[0]){
-					if(abs(pointer.mag()-1)<0.1)currentStrokeLs.push_back(pointer.getNorm());
+					if(abs(pointer.mag()-1)<0.1){
+						if(!mode)currentStrokeLs.push_back(pointer.getNorm());
+						else currentColor = pointer.getNorm();
+					}
 				}if(mouseBtn[2]){
 					cameraGoalX = mouseX-cameraGrabX;
 					cameraGoalY = mouseY-cameraGrabY;
@@ -249,16 +290,18 @@ int main(int argc,char *argv[]){
 			}break;
 
 			case SDL_MOUSEWHEEL:
+				if(mode)return;
 				currentLayer -= event.wheel.y;
 				break;
 
 			case SDL_MOUSEBUTTONUP:switch(event.button.button){
 				case SDL_BUTTON_LEFT:{
 					mouseBtn[0] = false;
+					if(mode)return;
 					undoStack.push_back(currentLayer);
 					int dList = glGenLists(1);
 					glNewList(dList,GL_COMPILE);
-						currentColor.glColor();
+						currentColor.glHSV();
 						glBegin(GL_LINE_STRIP);
 							for(auto i:currentStrokeLs)i.glVertex();
 						glEnd();
@@ -266,7 +309,10 @@ int main(int argc,char *argv[]){
 					currentStrokeLs.clear();
 					layerLs[currentLayer].push_back(dList);
 				}break;
-				case SDL_BUTTON_MIDDLE:break;
+				case SDL_BUTTON_MIDDLE:
+					if(mouseBtn[0])return;
+					mode = !mode;
+					break;
 				case SDL_BUTTON_RIGHT:mouseBtn[2] = false;break;
 			}break;
 		}
@@ -298,12 +344,13 @@ int main(int argc,char *argv[]){
 		if(abs(pointer.mag()-1)>0.1 && abs(pointerGoal.mag()-1)<0.1)pointer = pointerGoal;
 		pointer = pointer+(pointerGoal-pointer)*elapsed*0.02;
 		renderedLayer += (currentLayer-renderedLayer)*elapsed*0.01;
-		renderDodec();
+		if(!mode)renderDodec();
+		else renderColorSelector();
 
 		glPushMatrix();
 			glScalef(0.99,0.99,0.99);
 			glColor4f(0.02,0.02,0.02,0.9);
-			glCallList(icoDList);
+			glCallList(mode?colorDList:icoDList);
 		glPopMatrix();
 
 		SDL_GL_SwapWindow(window);
