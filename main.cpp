@@ -277,6 +277,7 @@ int main(int argc,char *argv[]){
 				case SDLK_ESCAPE:exit(0);break;
 				case SDLK_F5:{
 					reshape(sw,sh);
+					system("mkdir tmp");
 					for(int r=0;r<73;++r){ // TODO: fix first frame
 						glClear(GL_COLOR_BUFFER_BIT|GL_DEPTH_BUFFER_BIT);
 						glLoadIdentity();
@@ -290,11 +291,11 @@ int main(int argc,char *argv[]){
 							glCallList(mode?colorDList:icoDList);
 						glPopMatrix();
 						SDL_GL_SwapWindow(window);
-						char filename[8];
-						sprintf(filename,"%02d.bmp",r);
+						char filename[16];
+						sprintf(filename,"tmp/%02d.bmp",r);
 						screenshot(filename);
 					}stringstream ss;
-					ss << "rm 00.bmp && convert -delay 3 -loop 0 *.bmp " << time(0) << ".gif && rm *.bmp";
+					ss << "rm tmp/00.bmp; convert -delay 3 -loop 0 tmp/*.bmp " << time(0) << ".gif; rm tmp/*.bmp; rmdir tmp";
 					system(ss.str().c_str());
 				}break;
 				case SDLK_z:if(event.key.keysym.mod && KMOD_CTRL){
