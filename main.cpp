@@ -17,7 +17,11 @@
 #include <functional>
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_opengl.h"
+#if defined __APPLE__ && defined __MACH__
+#include "OpenGL/glu.h"
+#else
 #include "GL/glu.h"
+#endif
 using namespace std;
 
 #define rDouble ((double)std::rand()/RAND_MAX)

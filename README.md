@@ -15,6 +15,11 @@ Unix:
 
     > ./run.sh
 
+macOS:
+
+    > brew install sdl2
+    > ./runmacos.sh
+
 ### Controls:
 
     Left drag:    draw/select color
